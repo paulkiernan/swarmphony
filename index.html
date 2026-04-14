@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swarmphony</title>
+  <meta name="description" content="Ethereal, audio-reactive 3D boid visualization">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <!-- Bottom-left now playing -->
+  <div id="now-playing" class="hidden">
+    <span id="now-playing-text"></span>
+  </div>
+
+  <!-- Bottom-right corner UI -->
+  <div id="corner-ui">
+    <!-- Mute toggle -->
+    <button id="mute-btn" title="Toggle mute">
+      <span id="mute-icon">♪</span>
+    </button>
+
+    <!-- What's this? -->
+    <button id="whats-this-btn">what's this?</button>
+
+    <!-- Dev mode -->
+    <button id="dev-btn">dev</button>
+  </div>
+
+  <!-- What's this popover -->
+  <div id="whats-this-panel" class="hidden">
+    <p>
+      <strong>Swarmphony</strong> is a generative murmuration built on the topological neighbor model described by Ballerini et al. (2008).
+      Each of the 4,096 birds tracks only its <em>7 nearest neighbors</em> — not all birds within a fixed radius — and follows three rules: <em>avoid collisions</em>, <em>align headings</em>, and <em>stay close</em>. The sweeping, organic motion you see emerges entirely from these local interactions.
+    </p>
+    <p>
+      The simulation is <strong>audio-reactive</strong>, driven by a live stream from <a href="https://somafm.com/defcon/" target="_blank" rel="noreferrer">DEF CON Radio</a> on SomaFM.
+      Bass kicks scatter the flock, mids tighten alignment, and treble sweeps drive turbulent flutter.
+    </p>
+  </div>
+
+  <!-- Dev mode panel -->
+  <div id="dev-mode-panel" class="hidden">
+    <div style="font-family: monospace; font-size: 10px; color: #999; margin-bottom: 3px;">spectrogram</div>
+    <canvas id="spectrogram-canvas" width="300" height="100"></canvas>
+    <div style="font-family: monospace; font-size: 10px; color: #999; margin-top: 6px; margin-bottom: 3px;">kick detector</div>
+    <canvas id="kick-canvas" width="300" height="60"></canvas>
+    <div id="dev-stats" style="font-family: monospace; font-size: 12px; margin-top: 5px;"></div>
+    
+    <div id="dev-sliders" style="margin-top: 10px; display: flex; flex-direction: column; gap: 5px; font-size: 11px;">
+      <label style="display:flex; justify-content:space-between;">Sep Dist: <span id="val-sep-dist">20.0</span> <input type="range" id="sl-sep-dist" min="1" max="100" value="20" step="1"></label>
+      <label style="display:flex; justify-content:space-between;">Ali Dist: <span id="val-ali-dist">136.0</span> <input type="range" id="sl-ali-dist" min="1" max="200" value="136" step="1"></label>
+      <label style="display:flex; justify-content:space-between;">Coh Dist: <span id="val-coh-dist">150.0</span> <input type="range" id="sl-coh-dist" min="1" max="200" value="150" step="1"></label>
+      <label style="display:flex; justify-content:space-between;">Sep Force: <span id="val-sep-force">25.0</span> <input type="range" id="sl-sep-force" min="0" max="100" value="25" step="1"></label>
+      <label style="display:flex; justify-content:space-between;">Ali Force: <span id="val-ali-force">3.5</span> <input type="range" id="sl-ali-force" min="0" max="5" value="3.5" step="0.05"></label>
+      <label style="display:flex; justify-content:space-between;">Coh Force: <span id="val-coh-force">5.0</span> <input type="range" id="sl-coh-force" min="0" max="20" value="5" step="0.1"></label>
+      <label style="display:flex; justify-content:space-between;">Max Speed: <span id="val-max-speed">25.0</span> <input type="range" id="sl-max-speed" min="5" max="60" value="25" step="1"></label>
+      <label style="display:flex; justify-content:space-between;">Kick Force: <span id="val-kick-force">120.0</span> <input type="range" id="sl-kick-force" min="0" max="2000" value="120" step="10"></label>
+    </div>
+  </div>
+
+
+  <canvas id="canvas"></canvas>
+  <script type="module" src="main.js?v=37"></script>
+</body>
+</html>
