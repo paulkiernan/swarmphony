@@ -25,6 +25,10 @@ export class AudioSubsystem {
     this._energyWindow  = new Float32Array(ENERGY_WINDOW);
     this._energyWinIdx  = 0;
 
+    // EMA applied to the final normalized energy output (smooths adaptive-window step-changes)
+    this._energyEMA = 0;
+    this._energyEMAAlpha = 0.15; // ~100ms time constant @ 60fps
+
     // Previous treble-band spectrum for spectral flux calculation
     this._prevTrebleBins = new Float32Array(141); // bins 46-186
     
@@ -175,9 +179,11 @@ export class AudioSubsystem {
       if (this._energyWindow[i] > eMax) eMax = this._energyWindow[i];
     }
     const energyRange = eMax - eMin;
-    this.energy = energyRange > 0.01
+    const normalizedEnergy = energyRange > 0.01
       ? (rawEnergy - eMin) / energyRange
       : 0;
+    this._energyEMA = this._energyEMA * (1 - this._energyEMAAlpha) + normalizedEnergy * this._energyEMAAlpha;
+    this.energy = this._energyEMA;
 
     // === KICK ONSET DETECTION ===
 
