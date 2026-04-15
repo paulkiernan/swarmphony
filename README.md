@@ -1,4 +1,4 @@
-# Swarmphony
+# swarmphony
 
 A generative murmuration — 4,096 birds simulated in real time on the GPU, reacting live to a radio stream.
 

@@ -12,18 +12,42 @@ export class AudioSubsystem {
     this.mids = 0;
     this.treble = 0;
     
-    // Smoothing factors
+    // Smoothing factors (per-feature — mids and treble have different time constants)
     this.smoothVars = { energy: 0, bass: 0, mids: 0, treble: 0 };
-    this.smoothing = 0.8;
+    this.smoothing = 0.7;       // bass / energy — slightly faster than before
+    this.smoothingMids = 0.6;   // slower — alignment should breathe with musical phrases
+    this.smoothingTreble = 0.2; // faster — flutter should snap to transients
+
+    // Adaptive energy normalization: sliding window min/max over ~5s (300 frames).
+    // Floor = local minimum in the window, so a quiet breakdown quickly pulls it
+    // toward 0. Ceiling = local maximum, so the loudest recent moment = 1.0.
+    const ENERGY_WINDOW = 300;
+    this._energyWindow  = new Float32Array(ENERGY_WINDOW);
+    this._energyWinIdx  = 0;
+
+    // Previous treble-band spectrum for spectral flux calculation
+    this._prevTrebleBins = new Float32Array(141); // bins 46-186
     
     // Kick onset detector
-    this.kick = 0;              // current kick intensity (0-1), decays over time
-    this._prevKickBand = 0;     // previous frame's narrow kick-band energy
-    this._prevMidsLowRaw = 0;   // previous frame's lower-mids energy (for gating)
-    this._kickDecay = 0.92;     // how fast the kick pulse fades
-    this._kickThreshold = 0.025; // minimum kick-band jump to register as a kick
-    this._kickCooldown = 0;     // frames to wait before next kick can fire
-    this._kickCooldownMax = 6;  // ~100ms at 60fps to avoid double-triggers
+    this.kick = 0;                  // current kick intensity (0-1), decays over time
+    this._kickDecay = 0.92;         // how fast the kick pulse fades
+    this._kickCooldown = 0;         // frames to wait before next kick can fire
+    this._kickCooldownMax = 15;     // ~250ms at 60fps — long enough to avoid double-triggers
+
+    // 3-frame moving average buffer for kick band (smooths noise before derivative)
+    this._kickSmooth = [0, 0, 0];
+
+    // Previous smoothed kick-band value for derivative
+    this._prevKickSmoothed = 0;
+
+    // Previous lower-mids energy for gating
+    this._prevMidsLowRaw = 0;
+
+    // Adaptive threshold: rolling mean of half-wave-rectified derivatives.
+    // Tracking the derivative (not raw energy) means sustained bass doesn't inflate
+    // the threshold — only actual transients count.
+    this._kickDerivHistory = new Float32Array(120); // ~2s at 60fps
+    this._kickDerivIdx = 0;
     
     this.isPlaying = false;
   }
@@ -89,57 +113,119 @@ export class AudioSubsystem {
 
     this.analyser.getByteFrequencyData(this.dataArray);
     
-    // Calculate bands (0 to 255 bins for 512 fftSize, roughly 0-11kHz)
-    let b = 0, m = 0, t = 0;
-    
-    // Bass (0-10 bins)
+    // === BASS (0-10 bins, ~0-860Hz) — raw energy, used for scatter/wander ===
+    let b = 0;
     for (let i = 0; i < 10; i++) b += this.dataArray[i];
-    // Mids (10-100 bins)
-    for (let i = 10; i < 100; i++) m += this.dataArray[i];
-    // Treble (100-250 bins)
-    for (let i = 100; i < 250; i++) t += this.dataArray[i];
-    
     b = b / (10 * 255);
-    m = m / (90 * 255);
-    t = t / (150 * 255);
-    let total = (b + m + t) / 3;
 
-    // Smooth values to prevent jarring jumps
-    this.smoothVars.bass = this.smoothVars.bass * this.smoothing + b * (1 - this.smoothing);
-    this.smoothVars.mids = this.smoothVars.mids * this.smoothing + m * (1 - this.smoothing);
-    this.smoothVars.treble = this.smoothVars.treble * this.smoothing + t * (1 - this.smoothing);
-    this.smoothVars.energy = this.smoothVars.energy * this.smoothing + total * (1 - this.smoothing);
+    // === MIDS — spectral centroid over bins 3-46 (~260Hz-4kHz) ===
+    // Spectral centroid is the energy-weighted center of the harmonic band.
+    // It rises when harmonic content shifts upward (dense chords, bright synths)
+    // and falls during bass-heavy or sparse passages — a much richer signal
+    // for alignment than raw energy.
+    let mWeightedSum = 0, mMagSum = 0;
+    for (let i = 3; i <= 46; i++) {
+      const mag = this.dataArray[i] / 255;
+      mWeightedSum += i * mag;
+      mMagSum += mag;
+    }
+    // Normalize centroid to 0-1 over the band range
+    const m = mMagSum > 0.001 ? (mWeightedSum / mMagSum - 3) / (46 - 3) : 0;
 
-    this.bass = this.smoothVars.bass;
-    this.mids = this.smoothVars.mids;
+    // === TREBLE — spectral flux over bins 46-186 (~4kHz-16kHz) ===
+    // Spectral flux measures how rapidly the spectrum is changing frame-to-frame.
+    // Caps at bin 186 (~16kHz) — the practical cutoff for 128kbps MP3 streams.
+    // Flux spikes on every hi-hat hit, cymbal scrape, or transient burst,
+    // making it ideal for driving turbulent flutter.
+    let tFlux = 0, tMagSum = 0;
+    for (let i = 46; i <= 186; i++) {
+      const mag = this.dataArray[i] / 255;
+      const prev = this._prevTrebleBins[i - 46];
+      tFlux += Math.max(0, mag - prev); // half-wave rectify — only count increases
+      tMagSum += mag;
+      this._prevTrebleBins[i - 46] = mag;
+    }
+    // Normalise flux by total magnitude so a loud-but-static signal doesn't
+    // inflate it — only genuine spectral change registers.
+    const t = tMagSum > 0.001 ? Math.min(1, tFlux / (tMagSum + 0.001) * 4) : 0;
+
+    const total = (b + m + t) / 3;
+
+    // Smooth — each feature has its own time constant
+    this.smoothVars.bass   = this.smoothVars.bass   * this.smoothing       + b * (1 - this.smoothing);
+    this.smoothVars.mids   = this.smoothVars.mids   * this.smoothingMids   + m * (1 - this.smoothingMids);
+    this.smoothVars.treble = this.smoothVars.treble * this.smoothingTreble + t * (1 - this.smoothingTreble);
+    this.smoothVars.energy = this.smoothVars.energy * this.smoothing       + total * (1 - this.smoothing);
+
+    this.bass   = this.smoothVars.bass;
+    this.mids   = this.smoothVars.mids;
     this.treble = this.smoothVars.treble;
-    this.energy = this.smoothVars.energy;
 
-    // Kick onset detection: bins 1-6 (~86-516Hz) captures kick fundamental + body
-    // without reaching into bass guitar / lower-mids territory.
-    let kickBand = 0;
-    for (let i = 1; i <= 6; i++) kickBand += this.dataArray[i];
-    kickBand = kickBand / (6 * 255);
+    // Adaptive normalization: sliding window min/max.
+    // Store raw energy in a circular buffer, then scan for the local min/max.
+    // Floor = window minimum (snaps toward 0 during quiet passages).
+    // Ceiling = window maximum (the loudest moment in the last ~5s = 1.0).
+    const rawEnergy = this.smoothVars.energy;
+    this._energyWindow[this._energyWinIdx] = rawEnergy;
+    this._energyWinIdx = (this._energyWinIdx + 1) % this._energyWindow.length;
 
-    // Lower-mids gate (bins 10-40, ~860Hz-3.4kHz): if mids are also spiking,
-    // the transient is likely a chord hit or vocal — not a kick drum.
+    let eMin = rawEnergy, eMax = rawEnergy;
+    for (let i = 0; i < this._energyWindow.length; i++) {
+      if (this._energyWindow[i] < eMin) eMin = this._energyWindow[i];
+      if (this._energyWindow[i] > eMax) eMax = this._energyWindow[i];
+    }
+    const energyRange = eMax - eMin;
+    this.energy = energyRange > 0.01
+      ? (rawEnergy - eMin) / energyRange
+      : 0;
+
+    // === KICK ONSET DETECTION ===
+
+    // 1. Narrow kick band: bins 0-2 (~0-172Hz at 512 FFT / 44.1kHz)
+    //    Kick drum fundamentals live at 50-130Hz — staying this tight minimises
+    //    bass guitar and lower-vocal bleed.
+    let kickRaw = 0;
+    for (let i = 0; i <= 2; i++) kickRaw += this.dataArray[i];
+    kickRaw = kickRaw / (3 * 255);
+
+    // 2. 3-frame moving average — smooths noise spikes before we diff
+    this._kickSmooth.shift();
+    this._kickSmooth.push(kickRaw);
+    const kickSmoothed = (this._kickSmooth[0] + this._kickSmooth[1] + this._kickSmooth[2]) / 3;
+
+    // 3. Derivative on the smoothed signal
+    const kickDerivative = kickSmoothed - this._prevKickSmoothed;
+    this._prevKickSmoothed = kickSmoothed;
+
+    // 4. Lower-mids gate: bins 10-40 (~860Hz-3.4kHz)
+    //    Chord hits and vocals spike here too; require kick derivative dominates.
     let midsLow = 0;
     for (let i = 10; i < 40; i++) midsLow += this.dataArray[i];
     midsLow = midsLow / (30 * 255);
-
-    const kickDerivative = kickBand - this._prevKickBand;
     const midsDerivative = midsLow - this._prevMidsLowRaw;
-    this._prevKickBand = kickBand;
     this._prevMidsLowRaw = midsLow;
+
+    // 5. Adaptive threshold via half-wave-rectified derivative history.
+    //    HWR only stores positive spikes, so the mean reflects typical transient
+    //    strength rather than sustained bass energy level.
+    const hwr = Math.max(0, kickDerivative);
+    this._kickDerivHistory[this._kickDerivIdx] = hwr;
+    this._kickDerivIdx = (this._kickDerivIdx + 1) % this._kickDerivHistory.length;
+    let derivMean = 0;
+    for (let i = 0; i < this._kickDerivHistory.length; i++) derivMean += this._kickDerivHistory[i];
+    derivMean /= this._kickDerivHistory.length;
+    // Require spike to be 2.5× the recent average transient — strong enough to
+    // reject noise but low enough to catch real kicks. Floor prevents lockout
+    // during silent passages at startup.
+    const adaptiveThreshold = Math.max(0.008, derivMean * 2.5);
 
     // Decay existing kick
     this.kick *= this._kickDecay;
 
-    // Cooldown prevents double-triggers on the same beat
+    // 6. Fire if: derivative clears adaptive threshold AND kick dominates over mids
     if (this._kickCooldown > 0) {
       this._kickCooldown--;
-    } else if (kickDerivative > this._kickThreshold && kickDerivative > midsDerivative * 1.5) {
-      // Bass spike must be at least 1.5x the simultaneous mids spike to pass the gate
+    } else if (hwr > adaptiveThreshold && kickDerivative > midsDerivative * 1.5) {
       this.kick = Math.min(1.0, kickDerivative * 5.0);
       this._kickCooldown = this._kickCooldownMax;
     }

@@ -122,6 +122,13 @@ p {
   pointer-events: none !important;
 }
 
+/* Live audio-modulated slider values */
+.live-val {
+  color: #f0a030;
+  margin-left: 4px;
+  min-width: 36px;
+}
+
 /* Bottom-left now playing */
 #now-playing {
   position: fixed;

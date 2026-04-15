@@ -16,7 +16,13 @@ let nowPlayingInterval = null;
 let isDevMode = false;
 let spectrogramCanvas, spectrogramCtx;
 let kickCanvas, kickCtx;
+let midsCanvas, midsCtx;
+let trebleCanvas, trebleCtx;
+let energyCanvas, energyCtx;
 let kickHistory = [];
+let midsHistory = [];
+let trebleHistory = [];
+let energyHistory = [];
 const KICK_HISTORY_LEN = 300;
 const devPanel = document.getElementById('dev-mode-panel');
 const devStats = document.getElementById('dev-stats');
@@ -27,6 +33,12 @@ function init() {
   spectrogramCtx = spectrogramCanvas.getContext('2d');
   kickCanvas = document.getElementById('kick-canvas');
   kickCtx = kickCanvas.getContext('2d');
+  midsCanvas = document.getElementById('mids-canvas');
+  midsCtx = midsCanvas.getContext('2d');
+  trebleCanvas = document.getElementById('treble-canvas');
+  trebleCtx = trebleCanvas.getContext('2d');
+  energyCanvas = document.getElementById('energy-canvas');
+  energyCtx = energyCanvas.getContext('2d');
 
   audioSystem = new AudioSubsystem();
   renderingSystem = new RenderingSubsystem(canvas);
@@ -221,12 +233,124 @@ function drawVisualizer(features) {
     }
   }
 
+  // === MIDS TIMESERIES ===
+  midsHistory.push(features.mids);
+  if (midsHistory.length > KICK_HISTORY_LEN) midsHistory.shift();
+
+  const mW = midsCanvas.width;
+  const mH = midsCanvas.height;
+  midsCtx.fillStyle = '#1a1a1a';
+  midsCtx.fillRect(0, 0, mW, mH);
+
+  midsCtx.strokeStyle = '#44aaff';
+  midsCtx.lineWidth = 1.5;
+  midsCtx.beginPath();
+  for (let i = 0; i < midsHistory.length; i++) {
+    const x = (i / KICK_HISTORY_LEN) * mW;
+    const y = mH - (midsHistory[i] * mH);
+    if (i === 0) midsCtx.moveTo(x, y);
+    else midsCtx.lineTo(x, y);
+  }
+  midsCtx.stroke();
+
+  midsCtx.fillStyle = 'rgba(68, 170, 255, 0.12)';
+  midsCtx.beginPath();
+  midsCtx.moveTo(0, mH);
+  for (let i = 0; i < midsHistory.length; i++) {
+    const x = (i / KICK_HISTORY_LEN) * mW;
+    const y = mH - (midsHistory[i] * mH);
+    midsCtx.lineTo(x, y);
+  }
+  midsCtx.lineTo((midsHistory.length / KICK_HISTORY_LEN) * mW, mH);
+  midsCtx.fill();
+
+  // === TREBLE TIMESERIES ===
+  trebleHistory.push(features.treble);
+  if (trebleHistory.length > KICK_HISTORY_LEN) trebleHistory.shift();
+
+  const tW = trebleCanvas.width;
+  const tH = trebleCanvas.height;
+  trebleCtx.fillStyle = '#1a1a1a';
+  trebleCtx.fillRect(0, 0, tW, tH);
+
+  trebleCtx.strokeStyle = '#bb88ff';
+  trebleCtx.lineWidth = 1.5;
+  trebleCtx.beginPath();
+  for (let i = 0; i < trebleHistory.length; i++) {
+    const x = (i / KICK_HISTORY_LEN) * tW;
+    const y = tH - (trebleHistory[i] * tH);
+    if (i === 0) trebleCtx.moveTo(x, y);
+    else trebleCtx.lineTo(x, y);
+  }
+  trebleCtx.stroke();
+
+  trebleCtx.fillStyle = 'rgba(187, 136, 255, 0.12)';
+  trebleCtx.beginPath();
+  trebleCtx.moveTo(0, tH);
+  for (let i = 0; i < trebleHistory.length; i++) {
+    const x = (i / KICK_HISTORY_LEN) * tW;
+    const y = tH - (trebleHistory[i] * tH);
+    trebleCtx.lineTo(x, y);
+  }
+  trebleCtx.lineTo((trebleHistory.length / KICK_HISTORY_LEN) * tW, tH);
+  trebleCtx.fill();
+
+  // === ENERGY TIMESERIES ===
+  energyHistory.push(features.energy);
+  if (energyHistory.length > KICK_HISTORY_LEN) energyHistory.shift();
+
+  const eW = energyCanvas.width;
+  const eH = energyCanvas.height;
+  energyCtx.fillStyle = '#1a1a1a';
+  energyCtx.fillRect(0, 0, eW, eH);
+
+  energyCtx.strokeStyle = '#44cc77';
+  energyCtx.lineWidth = 1.5;
+  energyCtx.beginPath();
+  for (let i = 0; i < energyHistory.length; i++) {
+    const x = (i / KICK_HISTORY_LEN) * eW;
+    const y = eH - (energyHistory[i] * eH);
+    if (i === 0) energyCtx.moveTo(x, y);
+    else energyCtx.lineTo(x, y);
+  }
+  energyCtx.stroke();
+
+  energyCtx.fillStyle = 'rgba(68, 204, 119, 0.12)';
+  energyCtx.beginPath();
+  energyCtx.moveTo(0, eH);
+  for (let i = 0; i < energyHistory.length; i++) {
+    const x = (i / KICK_HISTORY_LEN) * eW;
+    const y = eH - (energyHistory[i] * eH);
+    energyCtx.lineTo(x, y);
+  }
+  energyCtx.lineTo((energyHistory.length / KICK_HISTORY_LEN) * eW, eH);
+  energyCtx.fill();
+
+  // === LIVE SLIDER VALUES ===
+  // Mirror the shader's audio-modulation formulas so the displayed values
+  // reflect what the GPU is actually using each frame.
+  const sepBase  = parseFloat(document.getElementById('sl-sep-force').value);
+  const aliBase  = parseFloat(document.getElementById('sl-ali-force').value);
+  const cohBase  = parseFloat(document.getElementById('sl-coh-force').value);
+  const spdBase  = parseFloat(document.getElementById('sl-max-speed').value);
+
+  const energyInverse = 1.0 - Math.min(features.energy * 1.5, 0.6);
+  const liveSep   = sepBase * (1.0 + features.bass  * 2.0);
+  const liveAli   = aliBase * (0.3 + features.mids  * 3.0);
+  const liveCoh   = cohBase * (energyInverse + 0.4);
+  const liveSpeed = spdBase + features.energy * 15.0;
+
+  document.getElementById('live-sep-force').textContent = `→${liveSep.toFixed(1)}`;
+  document.getElementById('live-ali-force').textContent = `→${liveAli.toFixed(1)}`;
+  document.getElementById('live-coh-force').textContent = `→${liveCoh.toFixed(1)}`;
+  document.getElementById('live-max-speed').textContent = `→${liveSpeed.toFixed(1)}`;
+
   // === STATS TABLE ===
   devStats.innerHTML = `<table style="border-collapse:collapse;font-family:monospace;font-size:11px;width:100%">
     <tr><td style="color:#888">Energy</td><td style="text-align:right">${features.energy.toFixed(3)}</td>
         <td style="color:#888;padding-left:12px">Bass</td><td style="text-align:right">${features.bass.toFixed(3)}</td></tr>
-    <tr><td style="color:#888">Mids</td><td style="text-align:right">${features.mids.toFixed(3)}</td>
-        <td style="color:#888;padding-left:12px">Treble</td><td style="text-align:right">${features.treble.toFixed(3)}</td></tr>
+    <tr><td style="color:#888">Mids</td><td style="text-align:right;color:#44aaff;font-weight:${features.mids > 0.3 ? 'bold' : 'normal'}">${features.mids.toFixed(3)}</td>
+        <td style="color:#888;padding-left:12px">Treble</td><td style="text-align:right;color:#bb88ff;font-weight:${features.treble > 0.3 ? 'bold' : 'normal'}">${features.treble.toFixed(3)}</td></tr>
     <tr><td style="color:#888">Kick</td><td style="text-align:right;color:#ff6644;font-weight:${features.kick > 0.3 ? 'bold' : 'normal'}">${features.kick.toFixed(3)}</td>
         <td style="color:#888;padding-left:12px">Boids</td><td style="text-align:right">${physicsSystem.boidsCount}</td></tr>
   </table>`;
