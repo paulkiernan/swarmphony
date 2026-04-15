@@ -107,7 +107,10 @@ function init() {
   muteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!streamStarted) {
-      audioSystem.playUrl('https://ice2.somafm.com/defcon-128-mp3');
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const streamUrl = isIOS ? '/stream' : 'https://ice2.somafm.com/defcon-128-mp3';
+      audioSystem.playUrl(streamUrl);
       streamStarted = true;
       startNowPlaying();
       muteIcon.textContent = '\u266A';
