@@ -53,35 +53,50 @@ function init() {
   physicsSystem = new PhysicsSubsystem(renderingSystem.getRenderer());
   clock = new THREE.Clock();
 
-  // Dev Mode Toggle (button, not checkbox)
   const devBtn = document.getElementById('dev-btn');
   const whatsThisBtn = document.getElementById('whats-this-btn');
   const whatsThisPanel = document.getElementById('whats-this-panel');
 
+  // Single active panel — only one can be open at a time.
+  // Instantly hide both before showing a new one so opacity transitions never overlap.
+  let activePanel = null;
+
+  function closeAll() {
+    whatsThisPanel.classList.add('hidden');
+    devPanel.classList.add('hidden');
+    devBtn.classList.remove('active');
+    isDevMode = false;
+    activePanel = null;
+  }
+
+  function showPanel(name) {
+    if (activePanel === name) { closeAll(); return; }
+    closeAll();
+    activePanel = name;
+    if (name === 'dev') {
+      isDevMode = true;
+      devBtn.classList.add('active');
+      devPanel.classList.remove('hidden');
+    } else {
+      whatsThisPanel.classList.remove('hidden');
+    }
+  }
+
   devBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    isDevMode = !isDevMode;
-    devBtn.classList.toggle('active', isDevMode);
-    devPanel.classList.toggle('hidden', !isDevMode);
-    // close what's-this if opening dev
-    if (isDevMode) whatsThisPanel.classList.add('hidden');
+    showPanel('dev');
   });
 
-  // What's this popover
   whatsThisBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const opening = whatsThisPanel.classList.contains('hidden');
-    whatsThisPanel.classList.toggle('hidden');
-    // close dev panel if opening what's-this
-    if (opening && isDevMode) {
-      isDevMode = false;
-      devBtn.classList.remove('active');
-      devPanel.classList.add('hidden');
-    }
+    showPanel('whatsThis');
   });
+
   document.addEventListener('click', (e) => {
-    if (!whatsThisPanel.contains(e.target) && e.target !== whatsThisBtn) {
-      whatsThisPanel.classList.add('hidden');
+    if (activePanel === 'whatsThis' &&
+        !whatsThisPanel.contains(e.target) &&
+        e.target !== whatsThisBtn) {
+      closeAll();
     }
   });
 
