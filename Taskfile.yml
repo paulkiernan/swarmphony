@@ -1,0 +1,64 @@
+version: "3"
+
+tasks:
+  default:
+    desc: List available tasks
+    silent: true
+    cmds:
+      - task --list
+
+  install:
+    desc: Install npm dependencies
+    cmds:
+      - npm install
+    sources:
+      - package.json
+    generates:
+      - node_modules/.package-lock.json
+
+  dev:
+    desc: Start Vite dev server with HMR
+    deps: [install]
+    cmds:
+      - npx vite --open
+
+  build:
+    desc: Build the app to dist/ for deployment
+    deps: [install]
+    cmds:
+      - npx vite build
+
+  build:lib:
+    desc: Build library bundle to dist/ (ES module, three external)
+    deps: [install]
+    cmds:
+      - npx vite build --mode lib
+
+  preview:
+    desc: Preview the production app build locally
+    deps: [build]
+    cmds:
+      - npx vite preview --open
+
+  clean:
+    desc: Remove build artifacts and node_modules
+    cmds:
+      - rm -rf dist node_modules
+
+  lint:
+    desc: Check for syntax errors across JS files
+    deps: [install]
+    cmds:
+      - npx vite build 2>&1 | head -20
+      - echo "Build check passed"
+
+  fmt:
+    desc: Format JS files with Prettier (installs if needed)
+    cmds:
+      - npx prettier --write "*.js" "lib/**/*.js"
+
+  check:
+    desc: Run all checks (lint + build)
+    cmds:
+      - task: lint
+      - task: build

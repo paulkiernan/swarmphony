@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { AudioSubsystem } from './audio.js?v=37';
-import { PhysicsSubsystem } from './physics.js?v=37';
-import { RenderingSubsystem } from './rendering.js?v=37';
+import { AudioSubsystem } from './audio.js';
+import { PhysicsSubsystem } from './physics.js';
+import { RenderingSubsystem } from './rendering.js';
 
 const COLORS = {
   energy: '#44cc77',

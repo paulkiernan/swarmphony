@@ -241,7 +241,7 @@ void main() {
     // === KICK SCATTER ===
     // On detected kick drums, repel birds radially outward from their local neighbour centroid
     if (audioKick > 0.05) {
-        vec3 localCenter = cohCount > 0.0 ? cohCenter / cohCount : selfPosition;
+        vec3 localCenter = cohCount > 0.0 ? cohCenter : selfPosition;
         vec3 outward = normalize(selfPosition - localCenter + vec3(0.001));
         steer += outward * audioKick * kickForce;
     }
@@ -332,7 +332,7 @@ export class PhysicsSubsystem {
         this.velocityUniforms["cohesionForce"] = { value: 5.0 };
         this.velocityUniforms["maxSpeedBase"] = { value: 25.0 };
         this.velocityUniforms["audioKick"] = { value: 0.0 };
-        this.velocityUniforms["kickForce"] = { value: 120.0 };
+        this.velocityUniforms["kickForce"] = { value: 80.0 };
 
         this.velocityVariable.wrapS = THREE.RepeatWrapping;
         this.velocityVariable.wrapT = THREE.RepeatWrapping;

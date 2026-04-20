@@ -34,12 +34,12 @@ export class AudioSubsystem {
     
     // Kick onset detector
     this.kick = 0;                  // current kick intensity (0-1), decays over time
-    this._kickDecay = 0.92;         // how fast the kick pulse fades
+    this._kickDecay = 0.88;         // punchy but smooth tail (~5.5 frame half-life)
     this._kickCooldown = 0;         // frames to wait before next kick can fire
-    this._kickCooldownMax = 15;     // ~250ms at 60fps — long enough to avoid double-triggers
+    this._kickCooldownMax = 8;      // ~133ms at 60fps — tight enough for fast kick patterns
 
-    // 3-frame moving average buffer for kick band (smooths noise before derivative)
-    this._kickSmooth = [0, 0, 0];
+    // 2-frame moving average buffer for kick band (minimal smoothing, preserves transients)
+    this._kickSmooth = [0, 0];
 
     // Previous smoothed kick-band value for derivative
     this._prevKickSmoothed = 0;
@@ -194,10 +194,10 @@ export class AudioSubsystem {
     for (let i = 0; i <= 2; i++) kickRaw += this.dataArray[i];
     kickRaw = kickRaw / (3 * 255);
 
-    // 2. 3-frame moving average — smooths noise spikes before we diff
+    // 2. 2-frame moving average — minimal smoothing, preserves attack transients
     this._kickSmooth.shift();
     this._kickSmooth.push(kickRaw);
-    const kickSmoothed = (this._kickSmooth[0] + this._kickSmooth[1] + this._kickSmooth[2]) / 3;
+    const kickSmoothed = (this._kickSmooth[0] + this._kickSmooth[1]) / 2;
 
     // 3. Derivative on the smoothed signal
     const kickDerivative = kickSmoothed - this._prevKickSmoothed;
@@ -220,10 +220,9 @@ export class AudioSubsystem {
     let derivMean = 0;
     for (let i = 0; i < this._kickDerivHistory.length; i++) derivMean += this._kickDerivHistory[i];
     derivMean /= this._kickDerivHistory.length;
-    // Require spike to be 2.5× the recent average transient — strong enough to
-    // reject noise but low enough to catch real kicks. Floor prevents lockout
-    // during silent passages at startup.
-    const adaptiveThreshold = Math.max(0.008, derivMean * 2.5);
+    // Require spike to be 2.0× the recent average transient — sensitive enough
+    // to catch lighter kicks. Floor prevents lockout during silent passages.
+    const adaptiveThreshold = Math.max(0.006, derivMean * 2.0);
 
     // Decay existing kick
     this.kick *= this._kickDecay;
@@ -232,7 +231,7 @@ export class AudioSubsystem {
     if (this._kickCooldown > 0) {
       this._kickCooldown--;
     } else if (hwr > adaptiveThreshold && kickDerivative > midsDerivative * 1.5) {
-      this.kick = Math.min(1.0, kickDerivative * 5.0);
+      this.kick = Math.min(1.0, kickDerivative * 6.0);
       this._kickCooldown = this._kickCooldownMax;
     }
   }

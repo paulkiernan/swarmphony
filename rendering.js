@@ -85,7 +85,7 @@ export class RenderingSubsystem {
                 localPosition.x *= 1.0 + clamp(1.0 - speed / 30.0, 0.0, 0.5);
 
                 // Kick pulse: birds swell on detected kick drums
-                float beatPulse = kick * 2.5;
+                float beatPulse = kick * 1.5;
                 localPosition *= 1.0 + beatPulse;
 
                 // Align to velocity direction
@@ -116,8 +116,8 @@ export class RenderingSubsystem {
             
             void main() {
                 float finalShade = mix(vShade, 0.75, vDepth * vDepth);
-                // Kick pulse: flash darker on kick hits
-                finalShade *= (1.0 - kick * 0.6);
+                // Kick pulse: subtle darken on kick hits
+                finalShade *= (1.0 - kick * 0.3);
                 gl_FragColor = vec4(vec3(finalShade), 1.0);
             }
         `,

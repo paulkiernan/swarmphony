@@ -1,0 +1,27 @@
+{
+  "name": "swarmphony",
+  "version": "1.0.0",
+  "description": "Audio-reactive 3D boid murmuration visualization",
+  "type": "module",
+  "main": "dist/swarmphony.js",
+  "module": "dist/swarmphony.js",
+  "exports": {
+    ".": {
+      "import": "./dist/swarmphony.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.3.2"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  }
+}

@@ -6,14 +6,6 @@
   <title>swarmphony</title>
   <meta name="description" content="Ethereal, audio-reactive 3D boid visualization">
   <link rel="stylesheet" href="style.css">
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
 </head>
 <body>
 
@@ -70,12 +62,12 @@
       <span>Alignment Force</span>      <span id="val-ali-force">3.5</span>  <span id="live-ali-force" class="live-val"></span>    <input type="range" id="sl-ali-force"  min="0"  max="5"    value="3.5" step="0.05">
       <span>Cohesion Force</span>       <span id="val-coh-force">5.0</span>  <span id="live-coh-force" class="live-val"></span>    <input type="range" id="sl-coh-force"  min="0"  max="20"   value="5"   step="0.1">
       <span>Max Speed</span>            <span id="val-max-speed">25.0</span> <span id="live-max-speed" class="live-val"></span>    <input type="range" id="sl-max-speed"  min="5"  max="60"   value="25"  step="1">
-      <span>Kick Force</span>           <span id="val-kick-force">120.0</span><span></span>                                         <input type="range" id="sl-kick-force" min="0"  max="2000" value="120" step="10">
+      <span>Kick Force</span>           <span id="val-kick-force">80.0</span><span></span>                                          <input type="range" id="sl-kick-force" min="0"  max="2000" value="80"  step="10">
     </div>
   </div>
 
 
   <canvas id="canvas"></canvas>
-  <script type="module" src="main.js?v=37"></script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
