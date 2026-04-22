@@ -92,13 +92,76 @@ export class AudioSubsystem {
     this.playUrl(url);
   }
 
-  playUrl(url) {
+  async playUrl(url) {
     this.init();
     this.audioElement.src = url;
     if (this.context.state === 'suspended') {
-      this.context.resume();
+      await this.context.resume();
     }
-    this.audioElement.play();
+    try {
+      await this.audioElement.play();
+    } catch (e) {
+      console.error('Audio play failed:', e);
+    }
+
+    // On iOS, createMediaElementSource often doesn't pipe streaming audio
+    // through the Web Audio analyser. Detect this after a short delay and
+    // fall back to a fetch-based analyser source.
+    setTimeout(() => this._checkAndFixIOSAnalyser(url), 2000);
+  }
+
+  async _checkAndFixIOSAnalyser(url) {
+    if (!this.analyser || !this.isPlaying) return;
+    this.analyser.getByteFrequencyData(this.dataArray);
+    const sum = this.dataArray.reduce((a, b) => a + b, 0);
+    if (sum > 0) return; // analyser is working fine
+
+    // Analyser is silent — iOS createMediaElementSource doesn't pipe streaming
+    // audio through the Web Audio graph. Reroute: audio element plays directly
+    // to speakers, fetch-based stream feeds the analyser for visualization only.
+    console.warn('iOS analyser silent — switching to fetch-based analyser source');
+    try {
+      // Disconnect analyser from speakers so decoded viz data doesn't double-play
+      this.analyser.disconnect(this.context.destination);
+      // Route the audio element directly to speakers instead
+      this.sourceNode.connect(this.context.destination);
+
+      const response = await fetch(url);
+      const reader = response.body.getReader();
+      const chunks = [];
+      let totalLength = 0;
+      const CHUNK_DECODE_SIZE = 256 * 1024; // decode in 256KB batches
+
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          totalLength += value.byteLength;
+
+          if (totalLength >= CHUNK_DECODE_SIZE) {
+            const merged = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const c of chunks) { merged.set(c, offset); offset += c.byteLength; }
+            chunks.length = 0;
+            totalLength = 0;
+
+            try {
+              const audioBuffer = await this.context.decodeAudioData(merged.buffer.slice(0));
+              const src = this.context.createBufferSource();
+              src.buffer = audioBuffer;
+              // Connect to analyser only — NOT to destination (no audio output)
+              src.connect(this.analyser);
+              src.start();
+              src.onended = () => src.disconnect();
+            } catch (_) { /* skip undecodable chunks */ }
+          }
+        }
+      };
+      pump();
+    } catch (e) {
+      console.error('iOS fetch-based analyser fallback failed:', e);
+    }
   }
 
   togglePlay() {

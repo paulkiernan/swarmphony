@@ -24,6 +24,23 @@ export default defineConfig(({ mode }) => {
         },
     server: {
       open: true,
+      proxy: {
+        '/stream': {
+          target: 'https://ice2.somafm.com',
+          changeOrigin: true,
+          rewrite: (path) => '/defcon-128-mp3',
+        },
+      },
+    },
+    preview: {
+      allowedHosts: true,
+      proxy: {
+        '/stream': {
+          target: 'https://ice2.somafm.com',
+          changeOrigin: true,
+          rewrite: (path) => '/defcon-128-mp3',
+        },
+      },
     },
   };
 });

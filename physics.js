@@ -26,6 +26,8 @@ void main() {
 const velocityShader = `
 uniform float time;
 uniform float delta;
+uniform float boundsX;
+uniform float boundsY;
 uniform float separationDistance;
 uniform float alignmentDistance;
 uniform float cohesionDistance;
@@ -212,9 +214,9 @@ void main() {
     // === VIEWPORT-AWARE BOUNDARY ===
     // Wide in X/Y (birds can sweep across the full screen) but tight in Z
     // (prevents them from flying toward/behind the camera)
-    vec3 boundSize = vec3(600.0, 400.0, 200.0); // wide, tall, shallow
+    vec3 boundSize = vec3(boundsX, boundsY, 200.0);
     vec3 overshoot3 = max(abs(selfPosition) - boundSize, vec3(0.0));
-    vec3 returnDir = -sign(selfPosition) * overshoot3 * overshoot3 * 0.01;
+    vec3 returnDir = -sign(selfPosition) * overshoot3 * overshoot3 * 0.04;
     steer += returnDir;
 
     // === CURL NOISE WANDER ===
@@ -316,8 +318,19 @@ export class PhysicsSubsystem {
         this.positionUniforms["delta"] = { value: 0.0 };
         this.velocityUniforms["time"] = { value: 0.0 };
         this.velocityUniforms["delta"] = { value: 0.0 };
+        this.velocityUniforms["boundsX"] = { value: 600.0 };
+        this.velocityUniforms["boundsY"] = { value: 400.0 };
 
-        // Tuned defaults from user testing
+        // Tuned defaults from user testing — stored as base values so they
+        // can be scaled for smaller viewports while sliders still work.
+        this._baseParams = {
+            separationDistance: 20.0,
+            alignmentDistance: 136.0,
+            cohesionDistance: 150.0,
+            maxSpeedBase: 25.0,
+            kickForce: 80.0,
+        };
+
         this.velocityUniforms["separationDistance"] = { value: 20.0 };
         this.velocityUniforms["alignmentDistance"] = { value: 136.0 };
         this.velocityUniforms["cohesionDistance"] = { value: 150.0 };
@@ -380,6 +393,32 @@ export class PhysicsSubsystem {
         this.velocityUniforms["time"].value = time;
         this.velocityUniforms["delta"].value = delta;
 
+        // Compute bounds from camera geometry so boids stay within the visible
+        // frustum on any viewport shape. Must match the camera params in rendering.js.
+        const aspect = window.innerWidth / window.innerHeight;
+        const portrait = aspect < 1;
+        const fov = portrait ? 80 : 60;
+        const baseRadius = portrait ? 600 : 800;
+        const minRadius = baseRadius - 100; // orbit oscillation minimum
+        const halfHeight = minRadius * Math.tan((fov / 2) * Math.PI / 180);
+        const halfWidth = halfHeight * aspect;
+
+        // Keep flock within ~80% of the visible area so there's breathing room
+        // but boids never wander far off-screen.
+        const boundsX = portrait ? halfWidth * 0.8 : 600;
+        const boundsY = portrait ? Math.min(halfHeight * 0.8, 400) : 400;
+        this.velocityUniforms["boundsX"].value = boundsX;
+        this.velocityUniforms["boundsY"].value = boundsY;
+
+        // Scale flocking distances and speeds proportionally to the simulation
+        // area so sub-flock dynamics look similar on any screen size.
+        const scale = Math.max(0.4, boundsX / 600.0);
+        this.velocityUniforms["separationDistance"].value = this._baseParams.separationDistance * scale;
+        this.velocityUniforms["alignmentDistance"].value = this._baseParams.alignmentDistance * scale;
+        this.velocityUniforms["cohesionDistance"].value = this._baseParams.cohesionDistance * scale;
+        this.velocityUniforms["maxSpeedBase"].value = this._baseParams.maxSpeedBase * scale;
+        this.velocityUniforms["kickForce"].value = this._baseParams.kickForce * scale;
+
         this.velocityUniforms["audioEnergy"].value = audioFeatures.energy;
         this.velocityUniforms["audioBass"].value = audioFeatures.bass;
         this.velocityUniforms["audioMids"].value = audioFeatures.mids;
@@ -390,14 +429,14 @@ export class PhysicsSubsystem {
     }
 
     updateParams(params) {
-        if (params.sepDist !== undefined) this.velocityUniforms["separationDistance"].value = params.sepDist;
-        if (params.aliDist !== undefined) this.velocityUniforms["alignmentDistance"].value = params.aliDist;
-        if (params.cohDist !== undefined) this.velocityUniforms["cohesionDistance"].value = params.cohDist;
+        if (params.sepDist !== undefined) this._baseParams.separationDistance = params.sepDist;
+        if (params.aliDist !== undefined) this._baseParams.alignmentDistance = params.aliDist;
+        if (params.cohDist !== undefined) this._baseParams.cohesionDistance = params.cohDist;
         if (params.sepForce !== undefined) this.velocityUniforms["separationForce"].value = params.sepForce;
         if (params.aliForce !== undefined) this.velocityUniforms["alignmentForce"].value = params.aliForce;
         if (params.cohForce !== undefined) this.velocityUniforms["cohesionForce"].value = params.cohForce;
-        if (params.maxSpeed !== undefined) this.velocityUniforms["maxSpeedBase"].value = params.maxSpeed;
-        if (params.kickForce !== undefined) this.velocityUniforms["kickForce"].value = params.kickForce;
+        if (params.maxSpeed !== undefined) this._baseParams.maxSpeedBase = params.maxSpeed;
+        if (params.kickForce !== undefined) this._baseParams.kickForce = params.kickForce;
     }
 
     getPositionTexture() {

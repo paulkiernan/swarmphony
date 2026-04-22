@@ -303,6 +303,12 @@ input[type="range"]:hover::-webkit-slider-thumb {
   border-radius: 4px;
 }
 
+@media (max-width: 600px) {
+  #dev-sliders {
+    display: none !important;
+  }
+}
+
 /* Click-to-start splash */
 #start-splash {
   position: fixed;

@@ -8,7 +8,9 @@ export class RenderingSubsystem {
     this.scene.background = new THREE.Color(0xf5f5f0);
     this.scene.fog = new THREE.FogExp2(0xf5f5f0, 0.0004); // Very subtle fog — birds always visible
 
-    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 3000);
+    const aspect = window.innerWidth / window.innerHeight;
+    const fov = aspect < 1 ? 80 : 60;
+    this.camera = new THREE.PerspectiveCamera(fov, aspect, 1, 3000);
     this.camera.position.z = 600;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -136,19 +138,25 @@ export class RenderingSubsystem {
     this.material.uniforms.audioEnergy.value = audioFeatures.energy;
     this.material.uniforms.kick.value = audioFeatures.kick;
 
-    // Very slow, gentle camera orbit — mimics a distant observer
+    // Very slow, gentle camera orbit — mimics a distant observer.
+    // On portrait viewports, a wider FOV (80° vs 60°) compensates for the narrow
+    // aspect, so the camera can stay further out while the flock fills the screen.
     const time = Date.now() * 0.00006;
-    const camRadius = 800 + Math.sin(time * 0.7) * 100;
+    const aspect = window.innerWidth / window.innerHeight;
+    const baseRadius = aspect < 1 ? 600 : 800;
+    const camRadius = baseRadius + Math.sin(time * 0.7) * 100;
     this.camera.position.x = Math.sin(time) * camRadius;
     this.camera.position.z = Math.cos(time) * camRadius;
-    this.camera.position.y = Math.sin(time * 0.3) * 200 + 100; // Slightly elevated
+    this.camera.position.y = Math.sin(time * 0.3) * (aspect < 1 ? 100 : 200) + (aspect < 1 ? 50 : 100);
     this.camera.lookAt(0, 0, 0);
 
     this.composer.render();
   }
 
   onWindowResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const aspect = window.innerWidth / window.innerHeight;
+    this.camera.fov = aspect < 1 ? 80 : 60;
+    this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.composer.setSize(window.innerWidth, window.innerHeight);

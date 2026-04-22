@@ -388,7 +388,7 @@ function drawVisualizer(features) {
     <tr><td style="color:#888">Mids</td><td style="text-align:right;color:${COLORS.mids};font-weight:${features.mids > 0.3 ? 'bold' : 'normal'}">${features.mids.toFixed(3)}</td>
         <td style="color:#888;padding-left:12px">Treble</td><td style="text-align:right;color:${COLORS.treble};font-weight:${features.treble > 0.3 ? 'bold' : 'normal'}">${features.treble.toFixed(3)}</td></tr>
     <tr><td style="color:#888">Kick</td><td style="text-align:right;color:${COLORS.kick};font-weight:${features.kick > 0.3 ? 'bold' : 'normal'}">${features.kick.toFixed(3)}</td>
-        <td style="color:#888;padding-left:12px">Boids</td><td style="text-align:right">${physicsSystem.boidsCount}</td></tr>
+        <td style="color:#888;padding-left:12px">BOIDs</td><td style="text-align:right">${physicsSystem.boidsCount}</td></tr>
   </table>`;
 }
 
